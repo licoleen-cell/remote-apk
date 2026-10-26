@@ -3,10 +3,13 @@ package com.example.remotelaptop
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -17,6 +20,7 @@ class MainActivity : Activity() {
 
     private lateinit var wv: WebView
     private var errorOpen = false
+    private var fileCb: ValueCallback<Array<Uri>>? = null
 
     private fun prefs() = getSharedPreferences("cfg", Context.MODE_PRIVATE)
 
@@ -32,6 +36,26 @@ class MainActivity : Activity() {
         wv.settings.javaScriptEnabled = true
         wv.settings.domStorageEnabled = true
         wv.settings.setSupportZoom(false)
+        // Pemilih foto bawaan Android (tanpa izin akses galeri; app hanya menerima foto yang dipilih)
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                w: WebView, cb: ValueCallback<Array<Uri>>, p: FileChooserParams
+            ): Boolean {
+                fileCb?.onReceiveValue(null)
+                fileCb = cb
+                return try {
+                    val i = Intent(Intent.ACTION_GET_CONTENT)
+                    i.addCategory(Intent.CATEGORY_OPENABLE)
+                    i.type = "image/*"
+                    startActivityForResult(Intent.createChooser(i, "Pilih foto"), 77)
+                    true
+                } catch (e: Exception) {
+                    fileCb = null
+                    cb.onReceiveValue(null)
+                    false
+                }
+            }
+        }
         wv.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
                 view: WebView, request: WebResourceRequest, error: WebResourceError
@@ -91,6 +115,17 @@ class MainActivity : Activity() {
             .setNegativeButton("Tutup", null)
             .setOnDismissListener { errorOpen = false }
             .show()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(rc: Int, res: Int, data: Intent?) {
+        if (rc == 77) {
+            val u = if (res == RESULT_OK) data?.data else null
+            fileCb?.onReceiveValue(if (u != null) arrayOf(u) else null)
+            fileCb = null
+        } else {
+            super.onActivityResult(rc, res, data)
+        }
     }
 
     // Tombol back = menu kecil (halaman remote tidak punya riwayat)
